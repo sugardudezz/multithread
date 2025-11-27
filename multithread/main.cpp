@@ -52,8 +52,8 @@ Queue* create_queue() {
 
 void enqueue(Queue* q, Request* r) {
 	if ((q->front + 1) % QUEUE_SIZE == q->rear) abort();
-	q->front = (q->front + 1) % QUEUE_SIZE;
 	q->contents[q->front] = r;
+	q->front = (q->front + 1) % QUEUE_SIZE;
 	q->size++;
 }
 
@@ -65,30 +65,35 @@ Request* dequeue(Queue* q) {
 	return ret;
 }
 
+Request* create_request() {
+	return (Request*)malloc(sizeof(Request));
+}
+
 int is_empty(Queue* q){
 	return q->size == 0;
 }
 
 int is_full(Queue* q){
-	return q->size == 1;
+	return q->size == QUEUE_SIZE;
 }
 
 void* requester_thread(void* thread_id) {
 	int tid = (int)thread_id;
 	while (running) {
-		Request* r = (Request*)malloc(sizeof(Request));
+		Request* r = create_request();
 		r->user_id = rand() % NUM_USER;
 		r->reward_id = rand() % NUM_REWARD;
 
 		pthread_mutex_lock(&mutex_queue);
-		printf("[Requester : %d] Lock Acquire\n", tid);
+		printf("[Requester : %d] Lock acquire\n", tid);
 		while (is_full(&request_queue)) {
 			printf("[Requester : %d] Queue is full. Wait for dequeue\n", tid);
 			pthread_cond_wait(&cv_dequeue, &mutex_queue);
 		}
 		enqueue(&request_queue, r);
+		printf("[Requester : %d] Request queued\n", tid);
 		pthread_cond_signal(&cv_enqueue);
-		printf("[Requester : %d] Lock Released\n", tid);
+		printf("[Requester : %d] Lock released\n", tid);
 		pthread_mutex_unlock(&mutex_queue);
 
 	}
@@ -105,12 +110,16 @@ void* worker_thread(void* thread_id) {
 			printf("[Worker : %d] Queue is empty. Wait for enqueue\n", tid);
 			pthread_cond_wait(&cv_enqueue, &mutex_queue);
 		}
-		dequeue(&request_queue);
-		free(&request_queue);
+		Request* r = dequeue(&request_queue);
 		pthread_cond_signal(&cv_dequeue);
 		printf("[Worker : %d] Lock Released\n", tid);
 		pthread_mutex_unlock(&mutex_queue);
 
+		sem_wait(&sem_reward);
+		rewards[r->reward_id]--;
+		printf("[Worker : %d] Request resolved\n", tid);
+		sem_post(&sem_reward);
+		//free(r);
 		//request 해결하고 free부르기
 		//free(리퀘스트변수이름)
 	}
@@ -130,16 +139,22 @@ int main() {
 	}
 
 	pthread_t requester1;
-	pthread_create(&requester1, NULL, worker_thread, (void*)1);
+	pthread_create(&requester1, NULL, requester_thread, (void*)1);
 	pthread_t requester2;
-	pthread_create(&requester2, NULL, worker_thread, (void*)2);
+	pthread_create(&requester2, NULL, requester_thread, (void*)2);
 
 	pthread_t worker_threads[NUM_THREADS];
 	for (int i = 0; i < NUM_THREADS; i++) {
 		pthread_create(&worker_threads[i], NULL, worker_thread, (void*)(i + 1));
 	}
 	
-	Sleep(5000);
+	Sleep(1000);
 	running = false;
+	for (int i = 0; i < NUM_REWARD; i++) {
+		rewards[i] = 1 + i;
+	}
+	for (int i = 0; i < NUM_USER; i++) {
+		user_list[i] = { i + 1, 0 };
+	}
 	pthread_exit(NULL);
 }
