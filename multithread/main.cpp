@@ -25,7 +25,7 @@ typedef struct _User {
 }User;
 
 typedef struct _Queue {
-	Request* contents[NUM_REWARD];
+	Request contents[NUM_REWARD];
 	int front;
 	int rear;
 	int size;
@@ -50,23 +50,19 @@ Queue* create_queue() {
 	return q;
 }
 
-void enqueue(Queue* q, Request* r) {
+void enqueue(Queue* q, Request r) {
 	if ((q->front + 1) % QUEUE_SIZE == q->rear) abort();
 	q->contents[q->front] = r;
 	q->front = (q->front + 1) % QUEUE_SIZE;
 	q->size++;
 }
 
-Request* dequeue(Queue* q) {
+Request dequeue(Queue* q) {
 	if (q->front == q->rear) abort();
-	Request* ret = q->contents[q->rear];
+	Request ret = q->contents[q->rear];
 	q->rear = (q->rear + 1) % QUEUE_SIZE;
 	q->size--;
 	return ret;
-}
-
-Request* create_request() {
-	return (Request*)malloc(sizeof(Request));
 }
 
 int is_empty(Queue* q){
@@ -80,9 +76,7 @@ int is_full(Queue* q){
 void* requester_thread(void* thread_id) {
 	int tid = (int)thread_id;
 	while (running) {
-		Request* r = create_request();
-		r->user_id = rand() % NUM_USER;
-		r->reward_id = rand() % NUM_REWARD;
+		Request r = { rand() % NUM_USER, rand() % NUM_REWARD };
 
 		pthread_mutex_lock(&mutex_queue);
 		printf("[Requester : %d] Lock acquire\n", tid);
@@ -93,8 +87,8 @@ void* requester_thread(void* thread_id) {
 		enqueue(&request_queue, r);
 		printf("[Requester : %d] Request queued\n", tid);
 		pthread_cond_signal(&cv_enqueue);
-		printf("[Requester : %d] Lock released\n", tid);
 		pthread_mutex_unlock(&mutex_queue);
+		printf("[Requester : %d] Lock released\n", tid);
 
 	}
 	pthread_exit(NULL);
@@ -105,23 +99,21 @@ void* worker_thread(void* thread_id) {
 	int tid = (int)thread_id;
 	while (running) {
 		pthread_mutex_lock(&mutex_queue);
-		printf("[Worker : %d] Lock Acquire\n", tid);
+		printf("[Worker : %d] Lock acquired\n", tid);
 		while (is_empty(&request_queue)) {
 			printf("[Worker : %d] Queue is empty. Wait for enqueue\n", tid);
 			pthread_cond_wait(&cv_enqueue, &mutex_queue);
 		}
-		Request* r = dequeue(&request_queue);
+		Request r = dequeue(&request_queue);
 		pthread_cond_signal(&cv_dequeue);
-		printf("[Worker : %d] Lock Released\n", tid);
+
 		pthread_mutex_unlock(&mutex_queue);
+		printf("[Worker : %d] Lock released\n", tid);
 
 		sem_wait(&sem_reward);
-		rewards[r->reward_id]--;
+		rewards[r.reward_id]--;
 		printf("[Worker : %d] Request resolved\n", tid);
 		sem_post(&sem_reward);
-		//free(r);
-		//request 해결하고 free부르기
-		//free(리퀘스트변수이름)
 	}
 	pthread_exit(NULL);
 	return 0;
@@ -130,7 +122,6 @@ void* worker_thread(void* thread_id) {
 int main() {
 	srand(time(NULL));
 	sem_init(&sem_reward, 0, 1);
-	//리워드가 1,2,3,4,5,6,...개 있는것으로 설정
 	for (int i = 0; i < NUM_REWARD; i++) {
 		rewards[i] = 1 + i;
 	}
