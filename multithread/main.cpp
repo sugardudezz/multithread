@@ -146,11 +146,23 @@ int main() {
 	
 	Sleep(1000);
 	running = false;
+
+	pthread_join(requester1, NULL);
+	pthread_join(requester2, NULL);
+
+	for (int i = 0; i < NUM_THREADS; i++) {
+		pthread_join(worker_threads[i], NULL);
+	}
+
+	printf("\nrewards: ");
 	for (int i = 0; i < NUM_REWARD; i++) {
-		rewards[i] = 1 + i;
+		printf("%d, ", rewards[i]);
 	}
+
+	printf("\nusers: ");
 	for (int i = 0; i < NUM_USER; i++) {
-		user_list[i] = { i + 1, 0 };
+		printf("[%d, %d], ", user_list[i].user_id, user_list[i].reward_id);
 	}
+
 	pthread_exit(NULL);
 }
